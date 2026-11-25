@@ -1,0 +1,17 @@
+name: ci
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Składnia skryptów
+        run: for f in run-audit.sh install-skill.sh remote/*.sh lib/*.sh scripts/*.sh tests/*.sh; do bash -n "$f"; done
+      - name: ShellCheck (błędy)
+        run: shellcheck -S error run-audit.sh install-skill.sh remote/*.sh lib/*.sh scripts/*.sh tests/*.sh
+      - name: Testy parsera konfiguracji
+        run: bash tests/test_config.sh
+      - name: Skan sekretów
+        run: bash scripts/check-secrets.sh

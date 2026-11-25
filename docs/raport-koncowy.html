@@ -1,0 +1,427 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audyt hosta OpenClaw</title>
+<meta name="description" content="Raport z Projektu 1: audyt bezpieczeństwa serwera SSH, zapory sieciowej i uprawnień .claude/settings.json skillem healthcheck w OpenClaw.">
+<style>
+:root{
+  --bg:#f7f7f5; --surface:#ffffff; --surface-2:#f1f1ee; --text:#1d1d1b; --muted:#5e5e58; --border:#e2e1dc;
+  --accent:#3b5bdb; --accent-soft:#e8edff;
+  --pass:#2b8a3e; --pass-soft:#e6f4ea; --fail:#c92a2a; --fail-soft:#fdecec;
+  --warn:#b86e00; --warn-soft:#fff4e0; --info:#1c6fb8; --info-soft:#e7f1fb;
+  --code-bg:#f1f1ee; --shadow:0 1px 2px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.04);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141413; --surface:#1d1d1b; --surface-2:#262624; --text:#ecebe6; --muted:#a3a29b; --border:#34332f;
+    --accent:#8ea2ff; --accent-soft:#232a45;
+    --pass:#69db7c; --pass-soft:#1b2e20; --fail:#ff8787; --fail-soft:#3a1d1d;
+    --warn:#ffc078; --warn-soft:#3a2c14; --info:#74c0fc; --info-soft:#152a3b;
+    --code-bg:#262624; --shadow:none;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141413; --surface:#1d1d1b; --surface-2:#262624; --text:#ecebe6; --muted:#a3a29b; --border:#34332f;
+  --accent:#8ea2ff; --accent-soft:#232a45;
+  --pass:#69db7c; --pass-soft:#1b2e20; --fail:#ff8787; --fail-soft:#3a1d1d;
+  --warn:#ffc078; --warn-soft:#3a2c14; --info:#74c0fc; --info-soft:#152a3b;
+  --code-bg:#262624; --shadow:none;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1040px;margin:0 auto;padding:0 16px}
+header.hero{padding:56px 0 32px;border-bottom:1px solid var(--border);background:var(--surface)}
+.eyebrow{font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin:0 0 8px}
+h1{font-size:clamp(28px,4.5vw,40px);line-height:1.15;margin:0 0 12px;letter-spacing:-.01em}
+.lead{font-size:18px;color:var(--muted);max-width:760px;margin:0}
+.meta{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:20px;font-size:14px;color:var(--muted)}
+.meta b{color:var(--text);font-weight:600}
+nav.toc{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--border)}
+nav.toc .wrap{display:flex;gap:4px;overflow-x:auto;padding-top:8px;padding-bottom:8px;scrollbar-width:none}
+nav.toc a{white-space:nowrap;font-size:14px;color:var(--muted);text-decoration:none;padding:6px 10px;border-radius:8px}
+nav.toc a:hover{background:var(--surface-2);color:var(--text)}
+main section{padding:40px 0 8px}
+h2{font-size:24px;margin:0 0 6px;letter-spacing:-.005em}
+h2 .num{color:var(--accent);margin-right:8px;font-variant-numeric:tabular-nums}
+h3{font-size:18px;margin:28px 0 10px}
+p{margin:0 0 14px}
+.sub{color:var(--muted);margin-bottom:20px}
+a{color:var(--accent)}
+code{font:13.5px/1.4 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--code-bg);padding:1px 6px;border-radius:5px;word-break:break-word}
+pre{background:var(--code-bg);border:1px solid var(--border);border-radius:10px;padding:14px 16px;overflow-x:auto;font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:0 0 16px}
+pre code{background:none;padding:0}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;box-shadow:var(--shadow)}
+.grid{display:grid;gap:14px}
+.kpis{grid-template-columns:repeat(4,minmax(0,1fr));margin-top:28px}
+.kpi{padding:16px 18px}
+.kpi .v{font-size:34px;font-weight:700;line-height:1;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:13px;color:var(--muted);margin-top:6px}
+.kpi.pass .v{color:var(--pass)} .kpi.fail .v{color:var(--fail)} .kpi.warn .v{color:var(--warn)} .kpi.info .v{color:var(--info)}
+.verdict{margin-top:16px;border-left:4px solid var(--fail);background:var(--fail-soft);border-radius:10px;padding:14px 18px}
+.verdict b{color:var(--fail)}
+.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
+.area h3{margin:0 0 4px;font-size:17px}
+.area .state{font-weight:600}
+.area ul{margin:10px 0 0;padding-left:18px;font-size:15px}
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:12px;background:var(--surface);margin-bottom:18px}
+table{border-collapse:collapse;width:100%;font-size:14.5px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:top}
+th{font-size:12.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);background:var(--surface-2);font-weight:600}
+tr:last-child td{border-bottom:0}
+td.id{font:600 13px ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:nowrap}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:700;letter-spacing:.04em;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.badge::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor}
+.b-pass{color:var(--pass);background:var(--pass-soft)} .b-fail{color:var(--fail);background:var(--fail-soft)}
+.b-warn{color:var(--warn);background:var(--warn-soft)} .b-info{color:var(--info);background:var(--info-soft)}
+.sev{font-size:13px;color:var(--muted);white-space:nowrap}
+.sev.h{color:var(--fail);font-weight:600} .sev.m{color:var(--warn);font-weight:600}
+.callout{border-radius:12px;padding:14px 18px;margin:0 0 16px;border:1px solid var(--border);background:var(--surface)}
+.callout.accent{background:var(--accent-soft);border-color:transparent}
+.callout.warn{background:var(--warn-soft);border-color:transparent}
+.callout .t{font-weight:700;margin-bottom:4px}
+.flow{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:8px 0 20px}
+.step{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:14px;position:relative}
+.step .n{width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-weight:700;font-size:13px;display:grid;place-items:center;margin-bottom:8px}
+.step b{display:block;font-size:14.5px;margin-bottom:4px}
+.step span{font-size:13px;color:var(--muted);line-height:1.45;display:block}
+.step .where{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--accent);margin-top:8px;display:block}
+.list-check{list-style:none;padding:0;margin:0}
+.list-check li{padding:8px 0 8px 28px;position:relative;border-bottom:1px dashed var(--border)}
+.list-check li:last-child{border-bottom:0}
+.list-check li::before{position:absolute;left:0;top:8px;font-weight:700}
+.list-check li.ok::before{content:"✓";color:var(--pass)}
+.list-check li.no::before{content:"✗";color:var(--fail)}
+.list-check li.mid::before{content:"≈";color:var(--warn)}
+.bar{display:flex;height:12px;border-radius:999px;overflow:hidden;margin:10px 0 6px;background:var(--surface-2)}
+.bar i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13px;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:6px;background:var(--c)}
+footer{margin-top:48px;padding:28px 0 48px;border-top:1px solid var(--border);color:var(--muted);font-size:14px}
+.theme-toggle{position:fixed;right:16px;bottom:16px;z-index:10;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:999px;padding:8px 14px;font:inherit;font-size:13px;cursor:pointer;box-shadow:var(--shadow)}
+@media (max-width:860px){
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .cols-3,.cols-2{grid-template-columns:1fr}
+  .flow{grid-template-columns:1fr}
+}
+@media print{
+  nav.toc,.theme-toggle{display:none}
+  body{background:#fff}
+  section{break-inside:avoid-page}
+  .card,.table-wrap{box-shadow:none}
+}
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Projekt 1 · Szkolenie „Narzędzia AI” · Politechnika Warszawska</p>
+    <h1>Audyt bezpieczeństwa hosta z narzędziem OpenClaw</h1>
+    <p class="lead">Skill <code>healthcheck</code> w OpenClaw, uruchomiony zdalnie na maszynie w Azure, sprawdził konfigurację serwera SSH, zapory sieciowej i uprawnień w pliku <code>.claude/settings.json</code>. Na potrzeby zadania powstało reużywalne narzędzie i skill Claude Code <code>/audyt-hosta</code>.</p>
+    <div class="meta">
+      <div><b>Data audytu:</b> 25.11.2026</div>
+      <div><b>Host:</b> Azure ML compute instance, <code>203.0.113.10</code>*</div>
+      <div><b>System:</b> Ubuntu 22.04.5 LTS, kernel 6.8 (azure)</div>
+      <div><b>Narzędzie:</b> OpenClaw 2026.11.10, skill <code>healthcheck</code></div>
+    </div>
+
+    <div class="grid kpis">
+      <div class="card kpi pass"><div class="v">11</div><div class="l">kontroli PASS</div></div>
+      <div class="card kpi fail"><div class="v">4</div><div class="l">kontrole FAIL</div></div>
+      <div class="card kpi warn"><div class="v">8</div><div class="l">ostrzeżeń WARN</div></div>
+      <div class="card kpi info"><div class="v">17</div><div class="l">ustaleń agenta</div></div>
+    </div>
+    <div class="verdict">
+      <b>Wniosek:</b> logowanie SSH jest dobrze zabezpieczone, ale <b>host nie ma własnej zapory</b>, a <b>agenci AI działają na koncie z uprawnieniami roota</b> (sudo bez hasła, grupy <code>docker</code> i <code>lxd</code>) <b>bez reguł ograniczających</b> w <code>.claude/settings.json</code>. Błąd agenta albo prompt injection może więc bez żadnej bariery doprowadzić do przejęcia systemu.
+    </div>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Spis treści">
+  <div class="wrap">
+    <a href="#zadanie">1. Zadanie</a><a href="#ocena">2. Ocena OpenClaw</a><a href="#metoda">3. Narzędzie</a>
+    <a href="#wyniki">4. Wyniki</a><a href="#kontrole">5. Kontrole</a><a href="#agent">6. Ustalenia agenta</a>
+    <a href="#weryfikacja">7. Weryfikacja</a><a href="#rekomendacje">8. Rekomendacje</a><a href="#wnioski">9. Wnioski</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+<section id="zadanie">
+  <h2><span class="num">1</span>Zadanie i zakres</h2>
+  <p class="sub">Treść zadania: <em>„uruchom dedykowany skill healthcheck w OpenClaw w celu przeprowadzenia audytu zabezpieczeń serwera SSH, konfiguracji zapory sieciowej (firewall) oraz weryfikacji uprawnień w pliku .claude/settings.json”</em>.</p>
+  <div class="grid cols-3">
+    <div class="card"><b>Serwer SSH</b><p class="sub" style="margin:4px 0 0">Efektywna konfiguracja <code>sshd -T</code>, pliki <code>sshd_config.d</code>, klucze, ochrona przed brute-force.</p></div>
+    <div class="card"><b>Zapora sieciowa</b><p class="sub" style="margin:4px 0 0"><code>ufw</code>, <code>iptables</code>, <code>nftables</code> i usługi nasłuchujące na interfejsach publicznych.</p></div>
+    <div class="card"><b>.claude/settings.json</b><p class="sub" style="margin:4px 0 0">Reguły <code>deny/ask/allow</code>, tryb domyślny, hooki, sekrety w <code>env</code>, prawa pliku.</p></div>
+  </div>
+  <div class="callout" style="margin-top:16px"><b>Poza zakresem.</b> Zadanie obejmuje <b>audyt</b>, więc poprawki nie zostały wprowadzone. Plan naprawczy jest w <a href="#rekomendacje">sekcji 8</a> jako rekomendacje. Audyt odbywał się wyłącznie w trybie odczytu, a narzędzie po każdym przebiegu sprawdza, czy stan maszyny się nie zmienił.</div>
+</section>
+
+<section id="ocena">
+  <h2><span class="num">2</span>Ocena OpenClaw przed użyciem</h2>
+  <p class="sub">OpenClaw to agent AI z dostępem do powłoki, a więc rozszerzenie z zewnątrz. Zanim go zainstalowałem, przeszedłem checklistę oceny cudzego skilla i serwera MCP z warsztatu.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Kryterium</th><th>Ustalenie</th><th>Ocena</th></tr></thead>
+    <tbody>
+      <tr><td>Źródło</td><td><code>github.com/openclaw/openclaw</code>, fundacja non-profit, plik <code>SECURITY.md</code> z kanałem zgłoszeń</td><td><span class="badge b-pass">OK</span></td></tr>
+      <tr><td>Licencja</td><td>MIT</td><td><span class="badge b-pass">OK</span></td></tr>
+      <tr><td>Uprawnienia</td><td>Agent wykonuje polecenia na hoście z uprawnieniami użytkownika, a sandbox jest domyślnie wyłączony</td><td><span class="badge b-fail">Ryzyko</span></td></tr>
+      <tr><td>Kod</td><td>Paczka npm ma skrypty <code>pre/postinstall</code> i około 70 zależności. Skill <code>healthcheck</code> to sam plik <code>SKILL.md</code> (2909 B), bez skryptów i adresów URL</td><td><span class="badge b-warn">Uwaga</span></td></tr>
+      <tr><td>Zakres danych</td><td>Wyniki poleceń trafiają do dostawcy modelu, więc nie mogą zawierać sekretów</td><td><span class="badge b-warn">Uwaga</span></td></tr>
+      <tr><td>Wersja</td><td>Przypięta: <code>openclaw@2026.11.10</code>, SHA-256 pliku <code>SKILL.md</code> zapisany w konfiguracji</td><td><span class="badge b-pass">OK</span></td></tr>
+      <tr><td>Izolacja</td><td>Audyt hosta wymaga dostępu do hosta. Zamiast kontenera: brak gateway, tryb <code>agent --local</code>, brak kanałów</td><td><span class="badge b-warn">Częściowo</span></td></tr>
+      <tr><td>Treść <code>SKILL.md</code></td><td>Pole <code>description</code> jest neutralne, bez dyrektyw typu „ignoruj instrukcje” i bez znaczników. Reguły skilla („Ask before state-changing actions”) to jednak instrukcje dla modelu, a nie bramki</td><td><span class="badge b-pass">OK</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout accent"><div class="t">Decyzja: używamy warunkowo</div>Warunki: przypięta wersja, kontrola SHA-256 skilla, gateway tylko na loopback, brak kanałów i dodatkowych skilli z ClawHub, brak opcji <code>--fix</code>, a zmiany w systemie tylko po akceptacji człowieka.</div>
+  <div class="callout warn"><div class="t">Luka skilla względem zadania</div><code>healthcheck</code> sam z siebie sprawdza firewall, ale z SSH tylko <code>systemctl status ssh</code> i <b>nie sprawdza w ogóle</b> <code>.claude/settings.json</code>. Dlatego narzędzie rozszerza zakres w poleceniu dla agenta i dostarcza mu dowody zebrane deterministycznie.</div>
+</section>
+
+<section id="metoda">
+  <h2><span class="num">3</span>Narzędzie <code>openclaw-audit</code> i skill <code>/audyt-hosta</code></h2>
+  <p class="sub">Narzędzie jest reużywalne: wszystkie dane maszyny pochodzą z jednego pliku konfiguracji, a cały proces (wymagania, środowisko, audyt, raport, sprzątanie) uruchamia jedno polecenie albo skill Claude Code.</p>
+  <div class="flow">
+    <div class="step"><div class="n">1</div><b>Plik i wymagania</b><span>walidacja pliku (parsowany, nie wykonywany), test SSH, tabela wymagań OK/BRAK z poleceniami naprawy</span><span class="where">laptop → maszyna</span></div>
+    <div class="step"><div class="n">2</div><b>Środowisko</b><span>prywatny Node 24 LTS i OpenClaw w <code>~/.openclaw-audit</code>, oba z kontrolą SHA-256; bez sudo, bez skryptów npm</span><span class="where">maszyna</span></div>
+    <div class="step"><div class="n">3</div><b>Audyt</b><span>A: 26 kontroli deterministycznych. B: skill <code>healthcheck</code> (<code>agent --local</code>)</span><span class="where">maszyna</span></div>
+    <div class="step"><div class="n">4</div><b>Raport</b><span>kontrola, czy konfiguracja się nie zmieniła; pobranie wyników i złożenie <code>REPORT.md</code></span><span class="where">laptop</span></div>
+    <div class="step"><div class="n">5</div><b>Sprzątanie</b><span>usunięcie <code>~/.openclaw-audit</code> (1,2 GB) i porównanie katalogu domowego ze zdjęciem sprzed instalacji</span><span class="where">maszyna</span></div>
+  </div>
+  <div class="grid cols-2">
+    <div class="card">
+      <b>Zabezpieczenia narzędzia</b>
+      <ul class="list-check" style="margin-top:8px">
+        <li class="ok">Klucz API jest czytany z pliku i przesyłany przez stdin SSH, więc nie trafia do argumentów ani logów</li>
+        <li class="ok">Dowody wymagające uprawnień zbiera skrypt, a agent dostaje zakaz używania <code>sudo</code> i wprowadzania zmian</li>
+        <li class="ok">Wartości <code>env</code> w <code>settings.json</code> są maskowane, zanim trafią do modelu</li>
+        <li class="ok">Po audycie porównanie <code>sshd -T</code>, <code>ufw</code> i SHA-256 <code>settings.json</code> ze stanem sprzed audytu</li>
+        <li class="ok">Gateway OpenClaw nie jest uruchamiany, więc nie ma żadnego nowego portu</li>
+        <li class="ok">Cały ślad w jednym katalogu: systemowy Node, <code>~/.openclaw</code> i <code>~/.npm</code> nietknięte. Po sprzątaniu raport potwierdza: „brak nowych ścieżek”</li>
+        <li class="ok">Braki w wymaganiach są zgłaszane z poleceniem naprawy, nigdy instalowane samodzielnie</li>
+      </ul>
+    </div>
+    <div class="card">
+      <b>Jakość i powtarzalność</b>
+      <ul class="list-check" style="margin-top:8px">
+        <li class="ok">20 testów parsera konfiguracji i diagnozy połączenia, w tym próby wstrzyknięcia polecenia</li>
+        <li class="ok">Kontrola śladów przetestowana na podrzuconym pliku: wykryty i zgłoszony</li>
+        <li class="ok">Skaner sekretów jako hook pre-commit i krok CI</li>
+        <li class="ok">CI w GitHub Actions: składnia, ShellCheck, testy, skan</li>
+        <li class="ok">Instalacja jest idempotentna: ponowne uruchomienie pomija wykonane już kroki</li>
+        <li class="ok">Oba tryby dostępu do modelu przetestowane: Claude CLI na maszynie i klucz API (klucz nie wyciekł do wyników, logów, historii, <code>/tmp</code> ani dziennika)</li>
+      </ul>
+    </div>
+  </div>
+  <h3>Uruchomienie</h3>
+<pre><code># jako skill Claude Code
+/audyt-hosta D:\audyty\moja-maszyna.env
+
+# albo z terminala
+bash run-audit.sh -c moja-maszyna.env --check     # walidacja i test połączenia
+bash run-audit.sh -c moja-maszyna.env             # instalacja + audyt + raport</code></pre>
+</section>
+
+<section id="wyniki">
+  <h2><span class="num">4</span>Wyniki w trzech obszarach</h2>
+  <p class="sub">Synteza kontroli deterministycznych (część A) i analizy skilla <code>healthcheck</code> (część B).</p>
+  <div class="grid cols-3">
+    <div class="card area">
+      <h3>Serwer SSH</h3>
+      <div class="state" style="color:var(--pass)">Dobrze zabezpieczony</div>
+      <div class="bar" role="img" aria-label="7 PASS, 1 FAIL, 3 WARN, 1 INFO"><i style="width:58.3%;background:var(--pass)"></i><i style="width:8.3%;background:var(--fail)"></i><i style="width:25%;background:var(--warn)"></i><i style="width:8.4%;background:var(--info)"></i></div>
+      <ul>
+        <li>Logowanie tylko kluczem: hasła, root i keyboard-interactive wyłączone</li>
+        <li><code>authorized_keys</code> z prawami 600, jeden klucz, <code>MaxAuthTries 4</code></li>
+        <li>Zbędne: <code>X11Forwarding</code>, <code>AllowAgentForwarding</code>, <code>PermitOpen any</code></li>
+        <li>Brak <code>AllowUsers</code> i fail2ban (niskie ryzyko przy wyłączonych hasłach)</li>
+      </ul>
+    </div>
+    <div class="card area">
+      <h3>Zapora sieciowa</h3>
+      <div class="state" style="color:var(--fail)">Brak zapory na hoście</div>
+      <div class="bar" role="img" aria-label="1 PASS, 1 FAIL, 1 WARN, 1 INFO"><i style="width:25%;background:var(--pass)"></i><i style="width:25%;background:var(--fail)"></i><i style="width:25%;background:var(--warn)"></i><i style="width:25%;background:var(--info)"></i></div>
+      <ul>
+        <li><code>ufw</code> nieaktywny, <code>iptables INPUT ACCEPT</code></li>
+        <li>Na wszystkich interfejsach: sshd :22 i :50000, nginx :80 (strona domyślna), :18881, :7654, UDP :36127</li>
+        <li>Jedyną ochroną jest NSG Azure, niewidoczny z hosta</li>
+        <li>Gateway OpenClaw nie jest wystawiony</li>
+      </ul>
+    </div>
+    <div class="card area">
+      <h3>.claude/settings.json</h3>
+      <div class="state" style="color:var(--fail)">Brak reguł uprawnień</div>
+      <div class="bar" role="img" aria-label="3 PASS, 2 FAIL, 3 WARN"><i style="width:37.5%;background:var(--pass)"></i><i style="width:25%;background:var(--fail)"></i><i style="width:37.5%;background:var(--warn)"></i></div>
+      <ul>
+        <li>Plik zawiera tylko <code>theme</code>: 0 reguł <code>deny</code>, <code>ask</code> i <code>allow</code></li>
+        <li>Tryb <code>bypassPermissions</code> nie jest zablokowany, brak hooków <code>PreToolUse</code></li>
+        <li>Plik ma prawa 664, katalog <code>~/.claude</code> 775</li>
+        <li>Brak sekretów w <code>env</code>, a poświadczenia mają prawa 600</li>
+      </ul>
+    </div>
+  </div>
+  <div class="legend" style="margin-top:12px">
+    <span style="--c:var(--pass)">PASS</span><span style="--c:var(--fail)">FAIL</span><span style="--c:var(--warn)">WARN</span><span style="--c:var(--info)">INFO</span>
+  </div>
+</section>
+
+<section id="kontrole">
+  <h2><span class="num">5</span>Część A: kontrole deterministyczne</h2>
+  <p class="sub">Reguły w <code>remote/collect.sh</code> działają bez AI i dają ten sam wynik przy każdym uruchomieniu. Agent dostał je jako „drugą opinię”.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>ID</th><th>Kontrola</th><th>Status</th><th>Ważność</th><th>Dowód</th></tr></thead>
+    <tbody>
+      <tr><td class="id">SSH-01</td><td>Logowanie hasłem wyłączone</td><td><span class="badge b-pass">PASS</span></td><td class="sev h">wysoka</td><td><code>passwordauthentication=no</code></td></tr>
+      <tr><td class="id">SSH-02</td><td>Logowanie na roota wyłączone</td><td><span class="badge b-pass">PASS</span></td><td class="sev h">wysoka</td><td><code>permitrootlogin=no</code></td></tr>
+      <tr><td class="id">SSH-03</td><td>Keyboard-interactive wyłączone</td><td><span class="badge b-pass">PASS</span></td><td class="sev m">średnia</td><td><code>kbdinteractiveauthentication=no</code></td></tr>
+      <tr><td class="id">SSH-04</td><td>Uwierzytelnianie kluczem włączone</td><td><span class="badge b-pass">PASS</span></td><td class="sev h">wysoka</td><td><code>pubkeyauthentication=yes</code></td></tr>
+      <tr><td class="id">SSH-05</td><td>X11 forwarding wyłączony</td><td><span class="badge b-fail">FAIL</span></td><td class="sev">niska</td><td><code>x11forwarding=yes</code></td></tr>
+      <tr><td class="id">SSH-06</td><td>Puste hasła zabronione</td><td><span class="badge b-pass">PASS</span></td><td class="sev h">wysoka</td><td><code>permitemptypasswords=no</code></td></tr>
+      <tr><td class="id">SSH-07</td><td>MaxAuthTries ≤ 4</td><td><span class="badge b-pass">PASS</span></td><td class="sev">niska</td><td><code>maxauthtries=4</code></td></tr>
+      <tr><td class="id">SSH-08</td><td>SSH na jednym porcie</td><td><span class="badge b-warn">WARN</span></td><td class="sev">niska</td><td><code>port=22,50000</code></td></tr>
+      <tr><td class="id">SSH-09</td><td>Ograniczenie kont (AllowUsers/AllowGroups)</td><td><span class="badge b-warn">WARN</span></td><td class="sev m">średnia</td><td>brak dyrektywy</td></tr>
+      <tr><td class="id">SSH-10</td><td>AllowTcpForwarding (potrzebny do tunelu)</td><td><span class="badge b-info">INFO</span></td><td class="sev">niska</td><td><code>allowtcpforwarding=yes</code></td></tr>
+      <tr><td class="id">SSH-11</td><td>authorized_keys tylko dla właściciela</td><td><span class="badge b-pass">PASS</span></td><td class="sev m">średnia</td><td><code>mode=600</code></td></tr>
+      <tr><td class="id">SSH-12</td><td>Ochrona przed brute-force (fail2ban)</td><td><span class="badge b-warn">WARN</span></td><td class="sev m">średnia</td><td>nieaktywny</td></tr>
+      <tr><td class="id">FW-01</td><td>Firewall hosta aktywny</td><td><span class="badge b-fail">FAIL</span></td><td class="sev h">wysoka</td><td><code>ufw inactive</code>, <code>INPUT=ACCEPT</code></td></tr>
+      <tr><td class="id">FW-03</td><td>Usługi na wszystkich interfejsach</td><td><span class="badge b-info">INFO</span></td><td class="sev m">średnia</td><td>9 gniazd / 5 usług</td></tr>
+      <tr><td class="id">FW-04</td><td>Brak publicznych portów HTTP</td><td><span class="badge b-warn">WARN</span></td><td class="sev m">średnia</td><td><code>0.0.0.0:80 (nginx)</code></td></tr>
+      <tr><td class="id">FW-05</td><td>Gateway OpenClaw niewystawiony</td><td><span class="badge b-pass">PASS</span></td><td class="sev h">wysoka</td><td>brak :18789 na 0.0.0.0</td></tr>
+      <tr><td class="id">UPD-01</td><td>Automatyczne aktualizacje bezpieczeństwa</td><td><span class="badge b-warn">WARN</span></td><td class="sev m">średnia</td><td>nieaktywne; 119 pakietów</td></tr>
+      <tr><td class="id">CC-01</td><td>settings.json bez zapisu dla grupy/innych</td><td><span class="badge b-fail">FAIL</span></td><td class="sev m">średnia</td><td><code>mode=664</code></td></tr>
+      <tr><td class="id">CC-02</td><td>Zdefiniowane reguły deny/ask</td><td><span class="badge b-fail">FAIL</span></td><td class="sev h">wysoka</td><td><code>deny=0 ask=0 allow=0</code></td></tr>
+      <tr><td class="id">CC-03</td><td>defaultMode ≠ bypassPermissions</td><td><span class="badge b-pass">PASS</span></td><td class="sev h">wysoka</td><td>domyślny</td></tr>
+      <tr><td class="id">CC-04</td><td>Brak zbyt szerokich reguł allow</td><td><span class="badge b-pass">PASS</span></td><td class="sev h">wysoka</td><td>brak reguł</td></tr>
+      <tr><td class="id">CC-05</td><td>Deny dla rm i odczytu .env</td><td><span class="badge b-warn">WARN</span></td><td class="sev m">średnia</td><td>brak obu</td></tr>
+      <tr><td class="id">CC-06</td><td>Hook PreToolUse</td><td><span class="badge b-warn">WARN</span></td><td class="sev m">średnia</td><td>0 hooków</td></tr>
+      <tr><td class="id">CC-07</td><td>Brak sekretów w sekcji env</td><td><span class="badge b-pass">PASS</span></td><td class="sev h">wysoka</td><td>brak <code>env</code></td></tr>
+      <tr><td class="id">CC-08</td><td>Zablokowany tryb bypassPermissions</td><td><span class="badge b-warn">WARN</span></td><td class="sev">niska</td><td>nie ustawiono</td></tr>
+    </tbody>
+  </table></div>
+  <p class="sub">Po audycie dodałem kontrolę <code>PRIV-01</code> (konto agenta ze ścieżkami do roota: sudo bez hasła, <code>docker</code>, <code>lxd</code>) i poprawiłem odczyt <code>permissions.disableBypassPermissionsMode</code> w CC-08. Uzasadnienie jest w <a href="#weryfikacja">sekcji 7</a>. W kolejnym przebiegu <code>PRIV-01</code> dało <span class="badge b-warn">WARN</span> (<code>sudo NOPASSWD, grupa docker, grupa lxd</code>), a agent, mając tę kontrolę w dowodach, po raz pierwszy wymienił też grupę <code>lxd</code>.</p>
+</section>
+
+<section id="agent">
+  <h2><span class="num">6</span>Część B: ustalenia skilla <code>healthcheck</code></h2>
+  <p class="sub">Agent OpenClaw (model Claude przez Claude CLI na maszynie) w trybie „Balanced”, bez zmian w systemie. Pracował 187 s i sformułował 17 ustaleń. Poniżej najważniejsze, w kolejności ważności.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>#</th><th>Obszar</th><th>Ważność</th><th>Ustalenie</th><th>Stosunek do części A</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Konto agentów</td><td class="sev h">wysoka</td><td><code>azureuser</code> ma sudo bez hasła i należy do grupy <code>docker</code>, a działają na nim agenci AI, więc w praktyce mają uprawnienia roota</td><td>nowe (brak w A)</td></tr>
+      <tr><td>2</td><td>Firewall</td><td class="sev m">średnia</td><td>Brak zapory na hoście. Na Azure ML wejście filtruje NSG, a nieostrożne włączenie <code>ufw</code> może odciąć SSH i agentów platformy</td><td>kwestionuje „wysoką” z FW-01</td></tr>
+      <tr><td>3</td><td>Ekspozycja</td><td class="sev m">średnia</td><td>nginx (strona domyślna, HTTP 200), serwer językowy notebooków :18881 i agenci Azure na wszystkich interfejsach</td><td>potwierdza FW-03/04</td></tr>
+      <tr><td>4</td><td>Aktualizacje</td><td class="sev m">średnia</td><td><code>unattended-upgrades</code> wyłączone; 71 pakietów security spośród 119</td><td>potwierdza UPD-01</td></tr>
+      <tr><td>5</td><td>Sekrety</td><td class="sev m">średnia</td><td>Token agenta platformy jest widoczny w argumentach procesu (<code>ps</code>) dla każdego lokalnego użytkownika</td><td>nowe (brak w A)</td></tr>
+      <tr><td>6–7</td><td>Claude Code</td><td class="sev m">średnia</td><td>Brak sekcji <code>permissions</code> i blokady trybu bypass. Przy sudo bez hasła <code>--dangerously-skip-permissions</code> oznacza pełne uprawnienia roota bez pytań</td><td>potwierdza; CC-02 obniża do „średniej”</td></tr>
+      <tr><td>9</td><td>Claude Code</td><td class="sev">niska</td><td>Prawa 664/775, ale <code>$HOME</code> ma 750, więc dostęp mają tylko członkowie grupy <code>azureuser</code></td><td>kwestionuje „średnią” z CC-01</td></tr>
+      <tr><td>10</td><td>SSH</td><td class="sev">niska</td><td>X11, agent i stream-local forwarding są zbędne. <code>AllowTcpForwarding</code> musi zostać ze względu na tunel</td><td>potwierdza SSH-05, rozszerza</td></tr>
+      <tr><td>13</td><td>SSH</td><td class="sev">niska</td><td>Brak fail2ban to niskie ryzyko, bo hasła są wyłączone</td><td>kwestionuje „średnią” z SSH-12</td></tr>
+      <tr><td>14–16</td><td>OpenClaw</td><td class="sev m">średnia/niska</td><td>Node 24.18 jest poniżej poziomu łatek, a token gateway zapisany jawnym tekstem (plik 600). Gateway na loopback, bez kanałów</td><td>potwierdza FW-05</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout"><div class="t">Luki zgłoszone przez agenta</div>Reguły NSG Azure (od nich zależy realna waga ustaleń o zaporze i ekspozycji), pliki zarządzane Claude Code (<code>policy-limits.json</code>), kopie zapasowe, szyfrowanie dysków po stronie Azure, rola usług :7654 i :36127.</div>
+</section>
+
+<section id="weryfikacja">
+  <h2><span class="num">7</span>Weryfikacja wyników agenta</h2>
+  <p class="sub">Wynik agenta potraktowałem jako drugą opinię, a nie rozstrzygnięcie. Kluczowe twierdzenia sprawdziłem ręcznie poleceniami tylko do odczytu i porównałem dwa niezależne przebiegi.</p>
+  <div class="grid cols-2">
+    <div class="card">
+      <b>Potwierdzone ręcznie</b>
+      <ul class="list-check" style="margin-top:8px">
+        <li class="ok"><code>allowagentforwarding yes</code>, <code>permitopen any</code> w <code>sshd -T</code></li>
+        <li class="ok"><code>~/.claude</code> 775, <code>settings.json</code> 664</li>
+        <li class="ok">nginx :80 i :18881 odpowiadają HTTP 200</li>
+        <li class="ok"><code>50-cloud-init.conf</code> ma prawa 600 root, czyli prawdziwa luka odczytu bez sudo</li>
+        <li class="ok">Kontrola po audycie: <code>sshd</code>, <code>ufw</code> i <code>settings.json</code> bez zmian (oba przebiegi)</li>
+      </ul>
+    </div>
+    <div class="card">
+      <b>Problemy z wynikiem agenta</b>
+      <ul class="list-check" style="margin-top:8px">
+        <li class="no"><b>Pominięta grupa <code>lxd</code></b>: druga, obok <code>docker</code>, droga do uprawnień roota. Była w dowodach, a agent przeoczył ją w obu przebiegach</li>
+        <li class="no"><b>Złamanie zakazu:</b> agent uruchomił <code>sudo -n true</code>, mimo zakazu <code>sudo</code>. Sam to zgłosił w sekcji „Luki”. Polecenie było nieszkodliwe, ale <b>prompt nie jest bramką</b></li>
+        <li class="mid"><b>Niedeterminizm:</b> 14 ustaleń w 1. przebiegu, 17 w 2. Wnioski główne są spójne, ale oceny ważności i nowe ustalenia się różnią</li>
+        <li class="mid">W 2. przebiegu agent podał w raporcie fragment publicznego IP operatora (usunięty z tej wersji)</li>
+      </ul>
+    </div>
+  </div>
+  <h3>Co dała współpraca kontroli deterministycznych i agenta</h3>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Sytuacja</th><th>Przykład</th><th>Działanie</th></tr></thead>
+    <tbody>
+      <tr><td>Agent znalazł coś, czego nie miały reguły</td><td>uprawnienia roota przez sudo/docker; token w <code>ps</code>; zbędne <code>AllowAgentForwarding</code></td><td>nowa kontrola <code>PRIV-01</code> w narzędziu</td></tr>
+      <tr><td>Agent poprawił ocenę reguły kontekstem</td><td>fail2ban przy wyłączonych hasłach; 664 przy <code>$HOME</code> 750; <code>ufw</code> na Azure ML za NSG</td><td>ważność w rekomendacjach według agenta</td></tr>
+      <tr><td>Reguła złapała to, co pominął agent</td><td>grupa <code>lxd</code> widoczna w danych kontekstowych</td><td>dodana do <code>PRIV-01</code></td></tr>
+      <tr><td>Agent ujawnił błąd reguły</td><td>agent umieścił <code>disableBypassPermissionsMode</code> w <code>permissions</code>, a reguła CC-08 czytała go z poziomu głównego</td><td>poprawka CC-08</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="rekomendacje">
+  <h2><span class="num">8</span>Rekomendacje (niewdrożone)</h2>
+  <p class="sub">Plan naprawczy jest etapowy i odwracalny, ułożony od najmniejszego ryzyka utraty dostępu. Każdy etap wymaga zgody właściciela maszyny. Do każdego etapu: kopia zapasowa, zmiana, test nowym połączeniem, ewentualne wycofanie.</p>
+  <div class="table-wrap"><table>
+    <thead><tr><th>Etap</th><th>Zmiana</th><th>Ryzyko utraty dostępu</th><th>Wycofanie</th></tr></thead>
+    <tbody>
+      <tr><td><b>1</b></td><td><code>settings.json</code>: <code>deny</code> dla <code>sudo</code>, <code>~/.ssh</code>, <code>.env</code>, plików z poświadczeniami; <code>ask</code> dla <code>rm</code>, <code>docker</code>, <code>curl</code>, <code>git push</code>; <code>permissions.disableBypassPermissionsMode: "disable"</code>; prawa 600/700</td><td><span class="badge b-pass">brak</span></td><td>kopia <code>settings.json.bak</code></td></tr>
+      <tr><td><b>2</b></td><td>Aktualizacje bezpieczeństwa, <code>unattended-upgrades</code>, Node ≥ 24.22.1, token OpenClaw w SecretRef</td><td><span class="badge b-pass">niskie</span></td><td>pakiety można przywrócić z apt</td></tr>
+      <tr><td><b>3</b></td><td>Drop-in <code>sshd_config.d/70-hardening.conf</code>: <code>X11Forwarding no</code>, <code>AllowAgentForwarding no</code>, <code>AllowStreamLocalForwarding no</code>; <code>sshd -t</code> i <code>reload</code></td><td><span class="badge b-warn">średnie</span></td><td>usunięcie pliku i <code>reload</code></td></tr>
+      <tr><td><b>4</b></td><td>NSG: SSH tylko z adresu operatora, zamknięcie :80. Zapora hosta tylko świadomie: najpierw <code>allow</code> dla 50000/22/44224/29876–29877, potem <code>enable</code></td><td><span class="badge b-fail">wysokie</span></td><td>automatyczne <code>ufw disable</code> po 5–10 min (<code>at</code>)</td></tr>
+      <tr><td><b>5</b></td><td>Osobne konto dla agentów AI, bez sudo, <code>docker</code> i <code>lxd</code>; hook <code>PreToolUse</code>; cykliczny audyt</td><td><span class="badge b-info">zmiana sposobu pracy</span></td><td>-</td></tr>
+    </tbody>
+  </table></div>
+  <div class="callout warn"><div class="t">Szczególnie na Azure ML</div>Nie usuwać portów 22 i 50000 z sshd, nie blokować ruchu do <code>168.63.129.16</code> ani portów agentów platformy. Ekspozycję ograniczać przede wszystkim w NSG, a nie zaporą hosta.</div>
+</section>
+
+<section id="wnioski">
+  <h2><span class="num">9</span>Wnioski i ograniczenia</h2>
+  <div class="grid cols-2">
+    <div class="card">
+      <b>Wnioski</b>
+      <ul class="list-check" style="margin-top:8px">
+        <li class="ok">Skill <code>healthcheck</code> dobrze <b>interpretuje kontekst</b>: koryguje ważność i dokłada nieoczywiste ustalenia. Słabiej sprawdza się jako kompletna lista kontrolna</li>
+        <li class="ok">Najlepszy wynik daje <b>połączenie</b> powtarzalnych reguł (bramka) i agenta (analiza) z ręczną weryfikacją kluczowych twierdzeń</li>
+        <li class="ok">Największe ryzyko hosta nie leży w SSH, tylko w <b>połączeniu agentów AI, roota i braku reguł</b> w <code>settings.json</code>. To dokładnie trzeci punkt zadania</li>
+        <li class="ok">Ocena rozszerzenia przed instalacją (checklista) wykazała lukę skilla względem zadania, zanim cokolwiek uruchomiłem</li>
+      </ul>
+    </div>
+    <div class="card">
+      <b>Ograniczenia</b>
+      <ul class="list-check" style="margin-top:8px">
+        <li class="mid">Zakaz zmian dla agenta jest instrukcją, a nie granicą. Kontrola po audycie tylko <b>wykrywa</b> zmiany. Twardą granicę dałoby konto bez sudo</li>
+        <li class="mid">NSG Azure jest niewidoczny z hosta, więc waga ustaleń o zaporze jest warunkowa</li>
+        <li class="mid">Wynik agenta jest niedeterministyczny. Do porównań w czasie służy część A</li>
+        <li class="mid">Raport opisuje przebieg w trybie Claude CLI; przebieg z kluczem API dał zgodne wnioski, ale wynik agenta różni się między przebiegami</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>* Dane identyfikujące maszynę zostały zanonimizowane: adres zastąpiony adresem dokumentacyjnym z RFC 5737, nazwa instancji i adres operatora usunięte. Surowe dowody (<code>evidence/</code>, <code>checks.tsv</code>, pełne wyjście agenta) zostały poza repozytorium.</p>
+    <p>Wygenerowano narzędziem <code>openclaw-audit</code> (skill <code>/audyt-hosta</code>), OpenClaw 2026.11.10, skill <code>healthcheck</code> SHA-256 <code>b41044ae…b59b</code>.</p>
+  </div>
+</footer>
+
+<button class="theme-toggle" type="button" id="themeToggle" aria-label="Przełącz motyw">◐ Motyw</button>
+<script>
+(function(){
+  var root=document.documentElement, btn=document.getElementById('themeToggle'), key='raport-theme';
+  try{var s=localStorage.getItem(key); if(s) root.setAttribute('data-theme',s);}catch(e){}
+  btn.addEventListener('click',function(){
+    var cur=root.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light');
+    var next=cur==='dark'?'light':'dark'; root.setAttribute('data-theme',next);
+    try{localStorage.setItem(key,next);}catch(e){}
+  });
+})();
+</script>
+</body>
+</html>

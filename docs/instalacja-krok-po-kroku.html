@@ -1,0 +1,367 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Audyt hosta z OpenClaw</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Slajdy 1920x1080 skalowane do okna. Jasne slajdy kroków, ciemne: tytuł i koniec. */
+:root{
+  --ink:#16222E; --paper:#F2F5F8; --soft:#4A5A6A; --line:#D5DDE5; --card:#FFFFFF;
+  --night:#101B26; --night-2:#1A2B3D; --on-night:#E3EBF2; --night-soft:#9DB0C2;
+  --accent:#2E78C7; --accent-night:#6FB0F0; --ok:#3FBF7F;
+  --mono:'JetBrains Mono', Consolas, 'Courier New', monospace;
+  --sans:'IBM Plex Sans', 'Segoe UI', Arial, sans-serif;
+}
+*{box-sizing:border-box;margin:0}
+html,body{height:100%;background:#0A1118;overflow:hidden}
+body{font-family:var(--sans);color:var(--ink)}
+#stage{position:absolute;left:50%;top:50%;width:1920px;height:1080px;transform-origin:center center}
+.slide{position:absolute;inset:0;padding:120px 128px;display:none;flex-direction:column;gap:40px;background:var(--paper);overflow:hidden}
+.slide.on{display:flex}
+.slide.dark{background:var(--night);color:var(--on-night)}
+
+.eyebrow{font:600 26px var(--mono);color:var(--accent);letter-spacing:1px}
+.dark .eyebrow{color:var(--accent-night)}
+h1{font-size:120px;line-height:1.04;font-weight:700;letter-spacing:-1px}
+h2{font-size:72px;line-height:1.1;font-weight:700;letter-spacing:-.5px}
+h3{font-size:36px;line-height:1.2;font-weight:600}
+.lead{font-size:36px;line-height:1.4;color:var(--soft);max-width:1500px}
+.dark .lead{color:var(--night-soft)}
+.head{display:flex;flex-direction:column;gap:16px}
+
+/* pasek postępu kroków */
+.steps{display:flex;gap:10px;align-items:center}
+.steps i{width:64px;height:10px;border-radius:5px;background:var(--line)}
+.steps i.on{background:var(--accent)}
+.steps span{font:600 24px var(--mono);color:var(--soft);margin-left:12px}
+
+/* terminal z poleceniem */
+.term{background:var(--night);border-radius:22px;padding:34px 44px 38px;display:flex;flex-direction:column;gap:10px;position:relative}
+.term .where{font:500 24px var(--mono);color:var(--night-soft);margin-bottom:6px}
+.term .cmd{font:400 34px/1.5 var(--mono);color:var(--on-night);white-space:pre}
+.term .cmd .p{color:var(--accent-night)}
+.term .cmd .c{color:#7D91A5}
+.term .cmd .v{color:#F5C065}
+.copy{position:absolute;top:26px;right:30px;font:500 22px var(--sans);color:var(--on-night);background:transparent;border:2px solid #34485E;border-radius:10px;padding:6px 16px;cursor:pointer}
+.copy:hover{border-color:var(--accent-night);color:var(--accent-night)}
+
+/* wskazówki pod poleceniem */
+.tips{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+.tip{background:var(--card);border:2px solid var(--line);border-radius:18px;padding:28px 30px;display:flex;flex-direction:column;gap:10px}
+.tip b{font-size:30px}
+.tip p{font-size:27px;line-height:1.4;color:var(--soft)}
+.tip code,.lead code{font-family:var(--mono);font-size:.9em;color:var(--accent)}
+
+/* mapa kroków */
+.map{display:grid;grid-template-columns:repeat(4,1fr);gap:22px}
+.map .m{background:var(--card);border:2px solid var(--line);border-radius:18px;padding:26px 28px;display:flex;flex-direction:column;gap:8px}
+.map .n{font:600 30px var(--mono);color:var(--accent)}
+.map .t{font-size:30px;font-weight:600;line-height:1.25}
+.map .m.end{background:var(--accent);border-color:var(--accent)}
+.map .m.end .n,.map .m.end .t{color:#fff}
+
+/* checklista wymagań */
+.req{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+.req .r{display:flex;gap:20px;align-items:flex-start;background:var(--card);border:2px solid var(--line);border-radius:18px;padding:26px 30px}
+.req .r .k{flex:none;width:44px;height:44px;border-radius:50%;background:var(--accent);color:#fff;font:600 26px var(--mono);display:grid;place-items:center}
+.req .r b{display:block;font-size:30px;margin-bottom:4px}
+.req .r p{font-size:26px;line-height:1.4;color:var(--soft)}
+
+/* krok pojawiający się po kliknięciu */
+.frag{opacity:0;transform:translateY(16px);transition:opacity .4s ease,transform .4s ease}
+.frag.show{opacity:1;transform:none}
+
+.foot{position:absolute;left:128px;right:128px;bottom:54px;display:flex;justify-content:space-between;font:500 22px var(--mono);color:#8A9AAA}
+.dark .foot{color:#5F7488}
+
+/* sterowanie (poza slajdem) */
+#hud{position:fixed;right:18px;bottom:14px;display:flex;gap:8px;align-items:center;font:500 14px var(--sans);color:#8FA3B7;opacity:.35;transition:opacity .2s}
+#hud:hover{opacity:1}
+#hud button{background:#1A2B3D;color:#E3EBF2;border:1px solid #2E4256;border-radius:8px;padding:6px 10px;font:inherit;cursor:pointer}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#E3EBF2;color:#101B26;padding:8px 16px;border-radius:8px;font:500 15px var(--sans);opacity:0;transition:opacity .2s;pointer-events:none}
+#toast.on{opacity:1}
+@media (prefers-reduced-motion:reduce){.frag{transition:none}}
+</style>
+</head>
+<body>
+<div id="stage">
+
+<!-- 1. Tytuł -->
+<section class="slide dark" data-title="Tytuł" style="justify-content:center">
+  <div class="head">
+    <p class="eyebrow">PROJEKT 1 · NARZĘDZIA AI · POLITECHNIKA WARSZAWSKA</p>
+    <h1>Audyt hosta<br>z OpenClaw</h1>
+    <p class="lead">Od pobrania skilla z GitHuba do raportu z audytu bezpieczeństwa: serwer SSH, zapora sieciowa i uprawnienia w <code style="color:#6FB0F0">.claude/settings.json</code>.</p>
+  </div>
+  <div class="term" style="width:1400px;margin-top:20px">
+    <p class="cmd"><span class="p">&gt;</span> /audyt-hosta D:\Politechnika\Demo\moja-maszyna.env</p>
+  </div>
+  <div class="foot"><span>github.com/JK14700PW/openclaw-audit</span><span>1</span></div>
+</section>
+
+<!-- 2. Mapa -->
+<section class="slide" data-title="Plan">
+  <div class="head">
+    <p class="eyebrow">PLAN DEMO</p>
+    <h2>Siedem kroków do raportu</h2>
+  </div>
+  <div class="map">
+    <div class="m frag"><span class="n">1</span><span class="t">Pobierz skill z GitHuba</span></div>
+    <div class="m frag"><span class="n">2</span><span class="t">Zainstaluj skill w Claude Code</span></div>
+    <div class="m frag"><span class="n">3</span><span class="t">Przygotuj plik z danymi maszyny</span></div>
+    <div class="m frag"><span class="n">4</span><span class="t">Otwórz sesję Claude Code i zaloguj się</span></div>
+    <div class="m frag"><span class="n">5</span><span class="t">Wywołaj /audyt-hosta</span></div>
+    <div class="m frag"><span class="n">6</span><span class="t">Zatwierdź audyt i poczekaj</span></div>
+    <div class="m frag end"><span class="n">7</span><span class="t">Otwórz wygenerowany raport</span></div>
+  </div>
+  <div class="foot"><span>Audyt hosta z OpenClaw</span><span>2</span></div>
+</section>
+
+<!-- 3. Co trzeba mieć -->
+<section class="slide" data-title="Wymagania">
+  <div class="head">
+    <p class="eyebrow">ZANIM ZACZNIESZ</p>
+    <h2>Co trzeba mieć</h2>
+  </div>
+  <div class="req">
+    <div class="r frag"><span class="k">✓</span><div><b>Claude Code (zalogowany) i Git for Windows</b><p>Claude Code uruchamia skill, Git Bash wykonuje jego skrypty. Logowanie: <code>claude</code>, potem <code>/login</code>.</p></div></div>
+    <div class="r frag"><span class="k">✓</span><div><b>Dostęp SSH do maszyny</b><p>Adres, port, użytkownik i plik klucza prywatnego.</p></div></div>
+    <div class="r frag"><span class="k">✓</span><div><b>Dostęp do modelu AI</b><p>Zalogowany Claude Code na maszynie albo plik z kluczem API Anthropic.</p></div></div>
+    <div class="r frag"><span class="k">✓</span><div><b>Włączona maszyna</b><p>Instancję Azure ML uruchom w Azure ML Studio: wyłącza się sama po bezczynności.</p></div></div>
+  </div>
+  <p class="lead frag" style="font-size:30px">Node.js i OpenClaw nie są potrzebne: skill sam je pobierze na maszynę, do jednego katalogu, i usunie po audycie.</p>
+  <div class="foot"><span>Audyt hosta z OpenClaw</span><span>3</span></div>
+</section>
+
+<!-- 4. Krok 1 -->
+<section class="slide" data-title="Krok 1">
+  <div class="head">
+    <div class="steps"><i class="on"></i><i></i><i></i><i></i><i></i><i></i><i></i><span>1 / 7</span></div>
+    <p class="eyebrow">KROK 1</p>
+    <h2>Pobierz skill z GitHuba</h2>
+  </div>
+  <div class="term">
+    <p class="where">PowerShell</p>
+    <button class="copy" type="button">Kopiuj</button>
+<p class="cmd"><span class="p">PS&gt;</span> mkdir D:\Politechnika\Demo; cd D:\Politechnika\Demo
+<span class="p">PS&gt;</span> git clone https://github.com/JK14700PW/openclaw-audit.git
+<span class="p">PS&gt;</span> cd openclaw-audit</p>
+  </div>
+  <div class="tips">
+    <div class="tip frag"><b>Publiczne repozytorium</b><p>Kod możesz przejrzeć przed uruchomieniem: README, <code>SKILL.md</code>, skrypty.</p></div>
+    <div class="tip frag"><b>Tylko kod</b><p>W repozytorium nie ma adresów ani kluczy, jest wzór pliku z danymi.</p></div>
+    <div class="tip frag"><b>Sprawdzone przez CI</b><p>Składnia, ShellCheck, testy i skan sekretów przy każdej zmianie.</p></div>
+  </div>
+  <div class="foot"><span>Audyt hosta z OpenClaw</span><span>4</span></div>
+</section>
+
+<!-- 5. Krok 2 -->
+<section class="slide" data-title="Krok 2">
+  <div class="head">
+    <div class="steps"><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><i></i><span>2 / 7</span></div>
+    <p class="eyebrow">KROK 2</p>
+    <h2>Zainstaluj skill w Claude Code</h2>
+  </div>
+  <div class="term">
+    <p class="where">PowerShell · D:\Politechnika\Demo\openclaw-audit</p>
+    <button class="copy" type="button">Kopiuj</button>
+<p class="cmd"><span class="p">PS&gt;</span> &amp; "C:\Program Files\Git\bin\bash.exe" install-skill.sh</p>
+  </div>
+  <div class="tips">
+    <div class="tip frag"><b>Gdzie trafia</b><p>Do <code>~/.claude/skills/audyt-hosta</code>, więc skill działa w każdym projekcie.</p></div>
+    <div class="tip frag"><b>Dlaczego pełna ścieżka</b><p>W PowerShell <code>bash</code> zwykle nie jest w PATH. W Git Bash wystarczy <code>bash install-skill.sh</code>.</p></div>
+    <div class="tip frag"><b>Tylko na żądanie</b><p>Claude nie uruchomi skilla sam. Wywołuje go wyłącznie użytkownik.</p></div>
+  </div>
+  <div class="foot"><span>Audyt hosta z OpenClaw</span><span>5</span></div>
+</section>
+
+<!-- 6. Krok 3 -->
+<section class="slide" data-title="Krok 3">
+  <div class="head">
+    <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><i></i><span>3 / 7</span></div>
+    <p class="eyebrow">KROK 3</p>
+    <h2>Przygotuj plik z danymi maszyny</h2>
+  </div>
+  <div class="term">
+    <p class="where">PowerShell</p>
+    <button class="copy" type="button">Kopiuj</button>
+<p class="cmd"><span class="p">PS&gt;</span> copy config.example.env D:\Politechnika\Demo\moja-maszyna.env
+<span class="p">PS&gt;</span> notepad D:\Politechnika\Demo\moja-maszyna.env</p>
+  </div>
+  <div class="term frag">
+    <p class="where">moja-maszyna.env · uzupełnij cztery pola</p>
+<p class="cmd">AUDIT_HOST=<span class="v">&lt;adres maszyny&gt;</span>     AUDIT_USER=<span class="v">&lt;użytkownik&gt;</span>
+AUDIT_PORT=<span class="v">&lt;port SSH&gt;</span>          AUDIT_SSH_KEY=<span class="v">&lt;ścieżka do klucza&gt;</span>
+<span class="c"># model: AUTH_MODE=claude-cli albo anthropic-api-key</span></p>
+  </div>
+  <div class="foot"><span>Audyt hosta z OpenClaw</span><span>6</span></div>
+</section>
+
+<!-- 7. Krok 4 -->
+<section class="slide" data-title="Krok 4">
+  <div class="head">
+    <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><i></i><span>4 / 7</span></div>
+    <p class="eyebrow">KROK 4</p>
+    <h2>Otwórz sesję Claude Code i zaloguj się</h2>
+  </div>
+  <div class="term">
+    <p class="where">PowerShell</p>
+    <button class="copy" type="button">Kopiuj</button>
+<p class="cmd"><span class="p">PS&gt;</span> cd D:\Politechnika\Demo
+<span class="p">PS&gt;</span> claude
+<span class="p">&gt;</span> /login       <span class="c"># gdy pojawi się „Please run /login” lub „401”</span></p>
+  </div>
+  <div class="tips">
+    <div class="tip frag"><b>Zaloguj się</b><p><code>/login</code> otwiera przeglądarkę. Użyj konta z subskrypcją Claude (Pro, Max, Team).</p></div>
+    <div class="tip frag"><b>Nowa sesja</b><p>Skille są wczytywane przy starcie sesji, więc po instalacji potrzebna jest nowa.</p></div>
+    <div class="tip frag"><b>Sprawdź listę</b><p>Wpisz <code>/</code> i zacznij pisać <code>audyt</code>: na liście pojawi się <code>/audyt-hosta</code>.</p></div>
+  </div>
+  <div class="foot"><span>Audyt hosta z OpenClaw</span><span>7</span></div>
+</section>
+
+<!-- 8. Krok 5 -->
+<section class="slide" data-title="Krok 5">
+  <div class="head">
+    <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><span>5 / 7</span></div>
+    <p class="eyebrow">KROK 5</p>
+    <h2>Wywołaj skill z plikiem danych</h2>
+  </div>
+  <div class="term">
+    <p class="where">Claude Code</p>
+    <button class="copy" type="button">Kopiuj</button>
+<p class="cmd"><span class="p">&gt;</span> /audyt-hosta D:\Politechnika\Demo\moja-maszyna.env</p>
+  </div>
+  <div class="tips">
+    <div class="tip frag"><b>Walidacja pliku</b><p>Nieznane klucze i złe wartości zatrzymują skill z opisem, co poprawić.</p></div>
+    <div class="tip frag"><b>Test połączenia</b><p>Skill łączy się przez SSH i pokazuje tabelę wymagań maszyny.</p></div>
+    <div class="tip frag"><b>Nic się nie zmienia</b><p>Na tym etapie skill tylko sprawdza. Braki zgłasza z poleceniem naprawy.</p></div>
+  </div>
+  <div class="foot"><span>Audyt hosta z OpenClaw</span><span>8</span></div>
+</section>
+
+<!-- 8b. Zgoda na polecenia -->
+<section class="slide" data-title="Zgoda">
+  <div class="head">
+    <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i></i><span>5 / 7</span></div>
+    <p class="eyebrow">KROK 5 · ZATWIERDZANIE POLECEŃ</p>
+    <h2>Claude pyta o zgodę na każde polecenie</h2>
+  </div>
+  <div class="term">
+    <p class="where">Claude Code</p>
+<p class="cmd"><span class="p">Bash command</span>
+  bash "…/run-audit.sh" --check -c "D:\Politechnika\Demo\moja-maszyna.env"
+Do you want to proceed?
+<span class="p">❯ 1. Yes</span>   2. Yes, and don’t ask again for: bash *   3. No</p>
+  </div>
+  <div class="tips">
+    <div class="tip frag"><b>Przeczytaj polecenie</b><p>Widzisz dokładny tekst polecenia, zanim cokolwiek się wykona.</p></div>
+    <div class="tip frag"><b>Wybierz 1. Yes, nie 2.</b><p>„1” to zgoda na jedno polecenie. „2” zapisze regułę <code>bash *</code>: każdy skrypt bez pytania, na stałe.</p></div>
+    <div class="tip frag"><b>Człowiek decyduje</b><p>To bramka human-in-the-loop: bez Twojej zgody skill nic nie uruchomi.</p></div>
+  </div>
+  <div class="foot"><span>Audyt hosta z OpenClaw</span><span></span></div>
+</section>
+
+<!-- 9. Krok 6 -->
+<section class="slide" data-title="Krok 6">
+  <div class="head">
+    <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i><span>6 / 7</span></div>
+    <p class="eyebrow">KROK 6</p>
+    <h2>Zatwierdź pełny audyt i poczekaj</h2>
+  </div>
+  <div class="term">
+    <p class="where">Claude Code · odpowiedź na pytanie o tryb</p>
+    <button class="copy" type="button">Kopiuj</button>
+<p class="cmd"><span class="p">&gt;</span> pełny audyt</p>
+  </div>
+  <div class="map" style="grid-template-columns:repeat(4,1fr)">
+    <div class="m frag"><span class="n">a</span><span class="t">Środowisko: prywatny Node i OpenClaw</span></div>
+    <div class="m frag"><span class="n">b</span><span class="t">Kontrole SSH, zapory i settings.json</span></div>
+    <div class="m frag"><span class="n">c</span><span class="t">Analiza skillem healthcheck</span></div>
+    <div class="m frag"><span class="n">d</span><span class="t">Pobranie wyników i sprzątanie</span></div>
+  </div>
+  <p class="lead frag" style="font-size:30px">Pierwszy audyt trwa 5–7 minut. Kolejne kroki widać w Claude Code na bieżąco.</p>
+  <div class="foot"><span>Audyt hosta z OpenClaw</span><span>9</span></div>
+</section>
+
+<!-- 10. Krok 7 -->
+<section class="slide" data-title="Krok 7">
+  <div class="head">
+    <div class="steps"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><span>7 / 7</span></div>
+    <p class="eyebrow">KROK 7</p>
+    <h2>Otwórz wygenerowany raport</h2>
+  </div>
+  <div class="term">
+    <p class="where">PowerShell · najnowszy raport</p>
+    <button class="copy" type="button">Kopiuj</button>
+<p class="cmd"><span class="p">PS&gt;</span> cd D:\Politechnika\Demo
+<span class="p">PS&gt;</span> $r = ls -Recurse REPORT.html | sort LastWriteTime | select -Last 1
+<span class="p">PS&gt;</span> start $r.FullName</p>
+  </div>
+  <div class="tips">
+    <div class="tip frag"><b>Gdzie jest</b><p>W katalogu z <code>REPORTS_DIR</code> (domyślnie <code>reports</code>) obok pliku z danymi: <code>&lt;host&gt;_&lt;data-czas&gt;\REPORT.html</code>.</p></div>
+    <div class="tip frag"><b>Otwiera się w przeglądarce</b><p>Jeden plik, działa offline. Obok leży ta sama treść jako <code>REPORT.md</code>.</p></div>
+    <div class="tip frag"><b>Co w środku</b><p>Kontrole, analiza agenta, ślad na maszynie oraz surowe dowody w <code>evidence/</code>.</p></div>
+  </div>
+  <div class="foot"><span>Audyt hosta z OpenClaw</span><span>10</span></div>
+</section>
+
+<!-- 11. Koniec -->
+<section class="slide dark" data-title="Koniec" style="justify-content:center">
+  <div class="head">
+    <p class="eyebrow">DZIĘKUJĘ</p>
+    <h2 style="font-size:96px">Raport otwarty. Pytania?</h2>
+    <p class="lead">Skill, dokumentacja i wzór pliku z danymi są w publicznym repozytorium.</p>
+  </div>
+  <div class="term" style="width:1180px">
+    <p class="cmd"><span class="p">github.com/</span>JK14700PW/openclaw-audit</p>
+  </div>
+  <div class="foot"><span>Audyt hosta z OpenClaw</span><span>11</span></div>
+</section>
+
+</div>
+
+<div id="hud"><span id="pos"></span><button id="prevB" type="button">←</button><button id="nextB" type="button">→</button><button id="fsB" type="button">Pełny ekran (F)</button></div>
+<div id="toast" role="status"></div>
+
+<script>
+const slides=[...document.querySelectorAll('.slide')];
+slides.forEach((s,i)=>{const n=s.querySelector('.foot span:last-child');if(n)n.textContent=i+1});
+let cur=0;
+function fit(){const s=Math.min(innerWidth/1920,innerHeight/1080);document.getElementById('stage').style.transform=`translate(-50%,-50%) scale(${s})`}
+function frags(i){return [...slides[i].querySelectorAll('.frag')]}
+function show(i,fromEnd){
+  cur=Math.max(0,Math.min(slides.length-1,i));
+  slides.forEach((s,k)=>s.classList.toggle('on',k===cur));
+  frags(cur).forEach(f=>f.classList.toggle('show',!!fromEnd));
+  document.getElementById('pos').textContent=(cur+1)+' / '+slides.length;
+  try{history.replaceState(null,'','#'+(cur+1))}catch(e){}
+}
+function next(){const hidden=frags(cur).filter(f=>!f.classList.contains('show'));if(hidden.length)hidden[0].classList.add('show');else if(cur<slides.length-1)show(cur+1)}
+function prev(){const shown=frags(cur).filter(f=>f.classList.contains('show'));if(shown.length)shown[shown.length-1].classList.remove('show');else if(cur>0)show(cur-1,true)}
+function fs(){if(!document.fullscreenElement)document.documentElement.requestFullscreen().catch(()=>{});else document.exitFullscreen()}
+document.addEventListener('keydown',e=>{
+  if(['ArrowRight','PageDown',' ','Enter'].includes(e.key)){e.preventDefault();next()}
+  else if(['ArrowLeft','PageUp','Backspace'].includes(e.key)){e.preventDefault();prev()}
+  else if(e.key==='Home')show(0);
+  else if(e.key==='End')show(slides.length-1,true);
+  else if(e.key==='f'||e.key==='F')fs();
+});
+document.getElementById('stage').addEventListener('click',e=>{
+  const c=e.target.closest('.copy');
+  if(c){const text=c.parentElement.querySelector('.cmd').textContent.split('\n').map(l=>l.replace(/^(PS>|>)\s?/,'')).join('\n');
+    const t=document.getElementById('toast');const ok=m=>{t.textContent=m;t.classList.add('on');setTimeout(()=>t.classList.remove('on'),1400)};
+    (navigator.clipboard?navigator.clipboard.writeText(text):Promise.reject()).then(()=>ok('Skopiowano polecenie')).catch(()=>ok('Kopiowanie niedostępne: zaznacz tekst ręcznie'));
+    return}
+  next();
+});
+document.getElementById('prevB').onclick=prev;
+document.getElementById('nextB').onclick=next;
+document.getElementById('fsB').onclick=fs;
+addEventListener('resize',fit);
+fit();
+const h=parseInt(location.hash.slice(1),10);show(isNaN(h)?0:h-1);
+</script>
+</body>
+</html>

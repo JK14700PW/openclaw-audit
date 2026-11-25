@@ -1,0 +1,11 @@
+# Dane prywatne — nigdy w repozytorium
+config.env
+*.env
+!config.example.env
+.private-patterns
+*.pem
+*.key
+.secrets/
+# Wyniki audytów (zawierają adresy i konfigurację maszyn)
+reports/
+raporty/
